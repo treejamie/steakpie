@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -140,5 +141,45 @@ func TestHandler_MissingFields(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestHandler_PingEvent(t *testing.T) {
+	payload := []byte(`{"zen": "Design for failure.", "hook_id": 123}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestHandler_FormEncodedRejected(t *testing.T) {
+	jsonPayload := `{"action":"published","registry_package":{"name":"test","ecosystem":"docker","package_version":{"version":"1.0.0","package_url":"test","container_metadata":{"tag":{"name":"1.0.0","digest":"sha256:abc"}}}},"repository":{"full_name":"test/test"},"sender":{"login":"test"}}`
+
+	// Create form-encoded body
+	formData := url.Values{}
+	formData.Set("payload", jsonPayload)
+	formBody := formData.Encode()
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(formBody))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Hub-Signature-256", signPayload([]byte(formBody), testSecret))
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("expected status %d, got %d: %s", http.StatusUnsupportedMediaType, rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "application/json") {
+		t.Errorf("error message should mention application/json, got: %s", body)
 	}
 }
