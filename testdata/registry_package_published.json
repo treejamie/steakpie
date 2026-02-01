@@ -1,0 +1,23 @@
+{
+  "action": "published",
+  "registry_package": {
+    "name": "hello-world",
+    "ecosystem": "docker",
+    "package_version": {
+      "version": "1.0.0",
+      "package_url": "ghcr.io/Codertocat/hello-world:1.0.0",
+      "container_metadata": {
+        "tag": {
+          "name": "1.0.0",
+          "digest": "sha256:abc123def456"
+        }
+      }
+    }
+  },
+  "repository": {
+    "full_name": "Codertocat/hello-world"
+  },
+  "sender": {
+    "login": "Codertocat"
+  }
+}
