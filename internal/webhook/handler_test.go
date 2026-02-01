@@ -1,12 +1,23 @@
 package webhook
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 )
+
+var testSecret = []byte("test-secret")
+
+func signPayload(payload, secret []byte) string {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write(payload)
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+}
 
 func TestHandler_ValidPayload(t *testing.T) {
 	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
@@ -16,21 +27,69 @@ func TestHandler_ValidPayload(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler().ServeHTTP(rec, req)
+	Handler(testSecret).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }
 
-func TestHandler_InvalidJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader("not valid json"))
+func TestHandler_ValidSignature(t *testing.T) {
+	payload := []byte(`{"action": "published"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestHandler_InvalidSignature(t *testing.T) {
+	payload := []byte(`{"action": "published"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", "sha256=invalidsignature00000000000000000000000000000000000000000000000000")
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestHandler_MissingSignature(t *testing.T) {
+	payload := []byte(`{"action": "published"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	Handler().ServeHTTP(rec, req)
+	Handler(testSecret).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestHandler_InvalidJSON(t *testing.T) {
+	payload := []byte("not valid json")
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -45,7 +104,7 @@ func TestHandler_MethodNotAllowed(t *testing.T) {
 			req := httptest.NewRequest(method, "/version/1", nil)
 			rec := httptest.NewRecorder()
 
-			Handler().ServeHTTP(rec, req)
+			Handler(testSecret).ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusMethodNotAllowed {
 				t.Errorf("expected status %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
@@ -55,11 +114,14 @@ func TestHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandler_EmptyBody(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(""))
+	payload := []byte("")
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler().ServeHTTP(rec, req)
+	Handler(testSecret).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -67,15 +129,14 @@ func TestHandler_EmptyBody(t *testing.T) {
 }
 
 func TestHandler_MissingFields(t *testing.T) {
-	// JSON with minimal/missing fields - should still parse successfully
-	// since Go's json decoder doesn't require all fields
-	payload := `{"action": "published"}`
+	payload := []byte(`{"action": "published"}`)
 
-	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler().ServeHTTP(rec, req)
+	Handler(testSecret).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
