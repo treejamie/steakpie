@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   release:
@@ -21,10 +22,14 @@ jobs:
       - name: Build binary
         run: go build -o steakpie ./cmd/steakpie
 
+      - name: Generate version
+        id: version
+        run: echo "tag=v0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.sha }}
-          name: Release ${{ github.sha }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
           files: steakpie
           generate_release_notes: true
