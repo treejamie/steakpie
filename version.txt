@@ -1,4 +1,4 @@
-0.0.1
+0.0.2
 
 When building a release you should name the release based on the contents of this file.
 
