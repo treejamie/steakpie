@@ -22,14 +22,35 @@ jobs:
       - name: Build binary
         run: go build -o steakpie ./cmd/steakpie
 
-      - name: Generate version
+      - name: Read version file
         id: version
-        run: echo "tag=v0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: |
+          VERSION=$(head -n 1 version.txt)
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+          # Extract body (everything after the first blank line)
+          BODY=$(awk 'found{print} /^$/{found=1}' version.txt)
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Check if release exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view ${{ steps.version.outputs.tag }} >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release ${{ steps.version.outputs.tag }} already exists, skipping"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create release
+        if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Release ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body: ${{ steps.version.outputs.body }}
           files: steakpie
-          generate_release_notes: true
