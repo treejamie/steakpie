@@ -6,11 +6,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/jc/steakpie/internal/config"
 )
 
 // Handler returns an HTTP handler for registry_package webhook events.
 // The secret is used to verify the webhook signature.
-func Handler(secret []byte) http.HandlerFunc {
+// The cfg parameter contains the package-to-commands mapping.
+func Handler(secret []byte, cfg config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received %s request from %s", r.Method, r.RemoteAddr)
 
@@ -81,6 +84,15 @@ func Handler(secret []byte) http.HandlerFunc {
 			event.Action,
 			event.RegistryPackage.Name,
 			event.RegistryPackage.PackageVersion.Version)
+
+		packageName := event.RegistryPackage.Name
+		commands := cfg.GetCommands(packageName)
+
+		if len(commands) > 0 {
+			log.Printf("✓ Found %d command(s) for package %s", len(commands), packageName)
+		} else {
+			log.Printf("No commands configured for package %s", packageName)
+		}
 
 		w.WriteHeader(http.StatusOK)
 	}
