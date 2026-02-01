@@ -1,0 +1,9 @@
+jamiec:
+  - docker compose down
+  - docker compose pull
+  - docker compose up -d
+  - echo "Deployment complete for jamiec"
+
+hello-world:
+  - echo "Package hello-world updated"
+  - docker pull ghcr.io/example/hello-world:latest
