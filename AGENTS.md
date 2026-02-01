@@ -16,3 +16,5 @@ When one part of your plan is complete, you MUST commit your work using a conven
 When you have completed your work, create a PR on github and summarise the work.
 
 The title of the pr MUST be in the format of a convention commit message. As this is used for squash merging the code.
+
+I'm adding prompt files as I go along, so dont' unstage anything in .prompts.
