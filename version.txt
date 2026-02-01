@@ -1,4 +1,4 @@
-This new branch there is a file called version.txt.
+0.0.1
 
 When building a release you should name the release based on the contents of this file.
 
