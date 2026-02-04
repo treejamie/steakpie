@@ -2,8 +2,9 @@
 config.yaml
 db.sqlite
 *.db
-*.db-shm
-*.db-wal
+*.sqlite-shm
+*.sqlite-wal
 
 # System files
 .DS_Store
+cmd/steakpie/steakpie
