@@ -127,7 +127,7 @@ func TestRecordEvent_DifferentDeliveryIDs(t *testing.T) {
 func TestRecordEvent_ConcurrentInserts(t *testing.T) {
 	// Use file-based database for concurrent testing
 	// :memory: doesn't work well with concurrent access
-	tmpDB := t.TempDir() + "/concurrent-test.db"
+	tmpDB := t.TempDir() + "/test_db.sqlite"
 	store, err := NewEventStore(tmpDB)
 	if err != nil {
 		t.Fatalf("Failed to create event store: %v", err)

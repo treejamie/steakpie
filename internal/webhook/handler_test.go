@@ -236,7 +236,7 @@ func TestHandler_UnconfiguredPackage(t *testing.T) {
 
 func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
 	// Use a temp database file for this test
-	tmpDB := t.TempDir() + "/test.db"
+	tmpDB := t.TempDir() + "/test_db.sqlite"
 
 	// Set the DB_PATH environment variable
 	oldPath := os.Getenv("DB_PATH")
@@ -283,7 +283,7 @@ func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
 }
 
 func TestHandler_Idempotency_DifferentEvents(t *testing.T) {
-	tmpDB := t.TempDir() + "/test.db"
+	tmpDB := t.TempDir() + "/test_db.sqlite"
 
 	oldPath := os.Getenv("DB_PATH")
 	os.Setenv("DB_PATH", tmpDB)
@@ -314,7 +314,7 @@ func TestHandler_Idempotency_DifferentEvents(t *testing.T) {
 }
 
 func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
-	tmpDB := t.TempDir() + "/test.db"
+	tmpDB := t.TempDir() + "/test_db.sqlite"
 
 	oldPath := os.Getenv("DB_PATH")
 	os.Setenv("DB_PATH", tmpDB)
@@ -340,7 +340,7 @@ func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
 }
 
 func TestHandler_Idempotency_PingEventsNotDeduplicated(t *testing.T) {
-	tmpDB := t.TempDir() + "/test.db"
+	tmpDB := t.TempDir() + "/test_db.sqlite"
 
 	oldPath := os.Getenv("DB_PATH")
 	os.Setenv("DB_PATH", tmpDB)
