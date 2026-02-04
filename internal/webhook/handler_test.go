@@ -233,3 +233,136 @@ func TestHandler_UnconfiguredPackage(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }
+
+func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
+	// Use a temp database file for this test
+	tmpDB := t.TempDir() + "/test.db"
+
+	// Set the DB_PATH environment variable
+	oldPath := os.Getenv("DB_PATH")
+	os.Setenv("DB_PATH", tmpDB)
+	defer os.Setenv("DB_PATH", oldPath)
+
+	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
+	if err != nil {
+		t.Fatalf("failed to read test payload: %v", err)
+	}
+
+	deliveryID := "test-delivery-001"
+
+	// Create handler
+	handler := Handler(testSecret, testConfig)
+
+	// First request
+	req1 := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req1.Header.Set("Content-Type", "application/json")
+	req1.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	req1.Header.Set("X-GitHub-Delivery", deliveryID)
+	rec1 := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Errorf("First request: expected status %d, got %d", http.StatusOK, rec1.Code)
+	}
+
+	// Second request with same delivery ID (duplicate)
+	req2 := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	req2.Header.Set("X-GitHub-Delivery", deliveryID)
+	rec2 := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Errorf("Second request: expected status %d, got %d", http.StatusOK, rec2.Code)
+	}
+
+	// Both should return 200, but second should be logged as duplicate
+}
+
+func TestHandler_Idempotency_DifferentEvents(t *testing.T) {
+	tmpDB := t.TempDir() + "/test.db"
+
+	oldPath := os.Getenv("DB_PATH")
+	os.Setenv("DB_PATH", tmpDB)
+	defer os.Setenv("DB_PATH", oldPath)
+
+	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
+	if err != nil {
+		t.Fatalf("failed to read test payload: %v", err)
+	}
+
+	handler := Handler(testSecret, testConfig)
+
+	deliveryIDs := []string{"delivery-001", "delivery-002", "delivery-003"}
+
+	for _, deliveryID := range deliveryIDs {
+		req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+		req.Header.Set("X-GitHub-Delivery", deliveryID)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("Request %s: expected status %d, got %d", deliveryID, http.StatusOK, rec.Code)
+		}
+	}
+}
+
+func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
+	tmpDB := t.TempDir() + "/test.db"
+
+	oldPath := os.Getenv("DB_PATH")
+	os.Setenv("DB_PATH", tmpDB)
+	defer os.Setenv("DB_PATH", oldPath)
+
+	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
+	if err != nil {
+		t.Fatalf("failed to read test payload: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	// Intentionally NOT setting X-GitHub-Delivery header
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+
+	// Should still return 200 (backwards compatibility)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestHandler_Idempotency_PingEventsNotDeduplicated(t *testing.T) {
+	tmpDB := t.TempDir() + "/test.db"
+
+	oldPath := os.Getenv("DB_PATH")
+	os.Setenv("DB_PATH", tmpDB)
+	defer os.Setenv("DB_PATH", oldPath)
+
+	payload := []byte(`{"zen": "Design for failure.", "hook_id": 123}`)
+	deliveryID := "ping-delivery-001"
+
+	handler := Handler(testSecret, testConfig)
+
+	// Send ping event twice with same delivery ID
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+		req.Header.Set("X-GitHub-Delivery", deliveryID)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("Ping request %d: expected status %d, got %d", i+1, http.StatusOK, rec.Code)
+		}
+	}
+}

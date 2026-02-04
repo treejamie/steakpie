@@ -1,2 +1,9 @@
-steakpie
+/steakpie
+config.yaml
+db.sqlite
+*.db
+*.db-shm
+*.db-wal
+
+# System files
 .DS_Store

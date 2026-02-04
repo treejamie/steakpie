@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/jc/steakpie/internal/config"
@@ -14,6 +15,19 @@ import (
 // The secret is used to verify the webhook signature.
 // The cfg parameter contains the package-to-commands mapping.
 func Handler(secret []byte, cfg config.Config) http.HandlerFunc {
+	// ensure the sqlite database is setup and if not set it up
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "db.sqlite"
+	}
+
+	store, err := NewEventStore(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize event store: %v", err)
+	}
+
+	log.Printf("✓ Initialized event store at %s", dbPath)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received %s request from %s", r.Method, r.RemoteAddr)
 
@@ -78,6 +92,28 @@ func Handler(secret []byte, cfg config.Config) http.HandlerFunc {
 			log.Printf("Failed to parse registry_package event: %v", err)
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
+		}
+
+		// Check for idempotency - extract X-GitHub-Delivery header
+		deliveryID := r.Header.Get("X-GitHub-Delivery")
+		if deliveryID == "" {
+			log.Printf("Warning: Missing X-GitHub-Delivery header, proceeding without deduplication")
+		} else {
+			// Try to record the event
+			isNew, err := store.RecordEvent(deliveryID, event.RegistryPackage.Name)
+			if err != nil {
+				log.Printf("Database error while recording event: %v", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+
+			if !isNew {
+				log.Printf("Duplicate webhook")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			log.Printf("event is new, proceed to dispatch")
 		}
 
 		log.Printf("✓ Successfully processed %s event for package %s (version %s)",

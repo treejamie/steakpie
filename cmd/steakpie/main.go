@@ -23,7 +23,9 @@ func run() error {
 			"Usage:\n" +
 			"  %s <config-file>\n\n" +
 			"Example:\n" +
-			"  WEBHOOK_SECRET=secret %s config.yaml", os.Args[0], os.Args[0])
+			"  WEBHOOK_SECRET=secret %s config.yaml\n\n" +
+			"Optional environment variables:\n" +
+			"  DB_PATH - Path to SQLite database (default: db.sqlite)", os.Args[0], os.Args[0])
 	}
 
 	secret := os.Getenv("WEBHOOK_SECRET")
