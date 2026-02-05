@@ -1,0 +1,10 @@
+/steakpie
+config.yaml
+db.sqlite
+*.db
+*.sqlite-shm
+*.sqlite-wal
+
+# System files
+.DS_Store
+cmd/steakpie/steakpie
