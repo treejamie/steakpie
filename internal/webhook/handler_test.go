@@ -28,17 +28,18 @@ func signPayload(payload, secret []byte) string {
 	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
-// setupInMemoryDB sets up an in-memory database for tests that don't need persistence
-func setupInMemoryDB(t *testing.T) func() {
-	oldPath := os.Getenv("DB_PATH")
-	os.Setenv("DB_PATH", ":memory:")
-	return func() {
-		os.Setenv("DB_PATH", oldPath)
+// createTestStore creates an in-memory EventStore for testing
+func createTestStore(t *testing.T) *EventStore {
+	store, err := NewEventStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create test store: %v", err)
 	}
+	t.Cleanup(func() { store.Close() })
+	return store
 }
 
 func TestHandler_ValidPayload(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
 	if err != nil {
@@ -50,7 +51,7 @@ func TestHandler_ValidPayload(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -58,7 +59,7 @@ func TestHandler_ValidPayload(t *testing.T) {
 }
 
 func TestHandler_ValidSignature(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte(`{"action": "published"}`)
 
@@ -67,7 +68,7 @@ func TestHandler_ValidSignature(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -75,7 +76,7 @@ func TestHandler_ValidSignature(t *testing.T) {
 }
 
 func TestHandler_InvalidSignature(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte(`{"action": "published"}`)
 
@@ -84,7 +85,7 @@ func TestHandler_InvalidSignature(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", "sha256=invalidsignature00000000000000000000000000000000000000000000000000")
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, rec.Code)
@@ -92,7 +93,7 @@ func TestHandler_InvalidSignature(t *testing.T) {
 }
 
 func TestHandler_MissingSignature(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte(`{"action": "published"}`)
 
@@ -100,7 +101,7 @@ func TestHandler_MissingSignature(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, rec.Code)
@@ -108,7 +109,7 @@ func TestHandler_MissingSignature(t *testing.T) {
 }
 
 func TestHandler_InvalidJSON(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte("not valid json")
 
@@ -117,7 +118,7 @@ func TestHandler_InvalidJSON(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -125,7 +126,7 @@ func TestHandler_InvalidJSON(t *testing.T) {
 }
 
 func TestHandler_MethodNotAllowed(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	methods := []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPatch}
 
@@ -134,7 +135,7 @@ func TestHandler_MethodNotAllowed(t *testing.T) {
 			req := httptest.NewRequest(method, "/version/1", nil)
 			rec := httptest.NewRecorder()
 
-			Handler(testSecret, testConfig).ServeHTTP(rec, req)
+			Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusMethodNotAllowed {
 				t.Errorf("expected status %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
@@ -144,7 +145,7 @@ func TestHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandler_EmptyBody(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte("")
 
@@ -153,7 +154,7 @@ func TestHandler_EmptyBody(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -161,7 +162,7 @@ func TestHandler_EmptyBody(t *testing.T) {
 }
 
 func TestHandler_MissingFields(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte(`{"action": "published"}`)
 
@@ -170,7 +171,7 @@ func TestHandler_MissingFields(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -178,7 +179,7 @@ func TestHandler_MissingFields(t *testing.T) {
 }
 
 func TestHandler_PingEvent(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload := []byte(`{"zen": "Design for failure.", "hook_id": 123}`)
 
@@ -187,7 +188,7 @@ func TestHandler_PingEvent(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -195,7 +196,7 @@ func TestHandler_PingEvent(t *testing.T) {
 }
 
 func TestHandler_FormEncodedRejected(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	jsonPayload := `{"action":"published","registry_package":{"name":"test","ecosystem":"docker","package_version":{"version":"1.0.0","package_url":"test","container_metadata":{"tag":{"name":"1.0.0","digest":"sha256:abc"}}}},"repository":{"full_name":"test/test"},"sender":{"login":"test"}}`
 
@@ -209,7 +210,7 @@ func TestHandler_FormEncodedRejected(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload([]byte(formBody), testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("expected status %d, got %d: %s", http.StatusUnsupportedMediaType, rec.Code, rec.Body.String())
@@ -222,7 +223,7 @@ func TestHandler_FormEncodedRejected(t *testing.T) {
 }
 
 func TestHandler_ConfiguredPackage(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
 	if err != nil {
@@ -234,7 +235,7 @@ func TestHandler_ConfiguredPackage(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -242,7 +243,7 @@ func TestHandler_ConfiguredPackage(t *testing.T) {
 }
 
 func TestHandler_UnconfiguredPackage(t *testing.T) {
-	defer setupInMemoryDB(t)()
+	store := createTestStore(t)
 
 	// Create a payload with an unconfigured package name
 	payload := []byte(`{
@@ -260,7 +261,7 @@ func TestHandler_UnconfiguredPackage(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -270,11 +271,11 @@ func TestHandler_UnconfiguredPackage(t *testing.T) {
 func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
 	// Use a temp database file for this test
 	tmpDB := t.TempDir() + "/test_db.sqlite"
-
-	// Set the DB_PATH environment variable
-	oldPath := os.Getenv("DB_PATH")
-	os.Setenv("DB_PATH", tmpDB)
-	defer os.Setenv("DB_PATH", oldPath)
+	store, err := NewEventStore(tmpDB)
+	if err != nil {
+		t.Fatalf("failed to create event store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
 
 	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
 	if err != nil {
@@ -284,7 +285,7 @@ func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
 	deliveryID := "test-delivery-001"
 
 	// Create handler
-	handler := Handler(testSecret, testConfig)
+	handler := Handler(testSecret, testConfig, store)
 
 	// First request
 	req1 := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
@@ -317,17 +318,18 @@ func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
 
 func TestHandler_Idempotency_DifferentEvents(t *testing.T) {
 	tmpDB := t.TempDir() + "/test_db.sqlite"
-
-	oldPath := os.Getenv("DB_PATH")
-	os.Setenv("DB_PATH", tmpDB)
-	defer os.Setenv("DB_PATH", oldPath)
+	store, err := NewEventStore(tmpDB)
+	if err != nil {
+		t.Fatalf("failed to create event store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
 
 	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
 	if err != nil {
 		t.Fatalf("failed to read test payload: %v", err)
 	}
 
-	handler := Handler(testSecret, testConfig)
+	handler := Handler(testSecret, testConfig, store)
 
 	deliveryIDs := []string{"delivery-001", "delivery-002", "delivery-003"}
 
@@ -348,10 +350,11 @@ func TestHandler_Idempotency_DifferentEvents(t *testing.T) {
 
 func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
 	tmpDB := t.TempDir() + "/test_db.sqlite"
-
-	oldPath := os.Getenv("DB_PATH")
-	os.Setenv("DB_PATH", tmpDB)
-	defer os.Setenv("DB_PATH", oldPath)
+	store, err := NewEventStore(tmpDB)
+	if err != nil {
+		t.Fatalf("failed to create event store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
 
 	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
 	if err != nil {
@@ -364,7 +367,7 @@ func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
 	// Intentionally NOT setting X-GitHub-Delivery header
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
 
 	// Should still return 200 (backwards compatibility)
 	if rec.Code != http.StatusOK {
@@ -374,15 +377,16 @@ func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
 
 func TestHandler_Idempotency_PingEventsNotDeduplicated(t *testing.T) {
 	tmpDB := t.TempDir() + "/test_db.sqlite"
-
-	oldPath := os.Getenv("DB_PATH")
-	os.Setenv("DB_PATH", tmpDB)
-	defer os.Setenv("DB_PATH", oldPath)
+	store, err := NewEventStore(tmpDB)
+	if err != nil {
+		t.Fatalf("failed to create event store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
 
 	payload := []byte(`{"zen": "Design for failure.", "hook_id": 123}`)
 	deliveryID := "ping-delivery-001"
 
-	handler := Handler(testSecret, testConfig)
+	handler := Handler(testSecret, testConfig, store)
 
 	// Send ping event twice with same delivery ID
 	for i := 0; i < 2; i++ {

@@ -44,12 +44,26 @@ func run() error {
 
 	log.Printf("✓ Loaded config with %d package(s)", len(cfg))
 
+	// Initialize event store for webhook deduplication
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "db.sqlite"
+	}
+
+	store, err := webhook.NewEventStore(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize event store: %w", err)
+	}
+	defer store.Close()
+
+	log.Printf("✓ Initialized event store at %s", dbPath)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
 	}
 
-	http.Handle("/version/1", webhook.Handler([]byte(secret), cfg))
+	http.Handle("/version/1", webhook.Handler([]byte(secret), cfg, store))
 
 	log.Printf("✓ Server starting on port %s", port)
 	log.Printf("✓ Webhook endpoint: http://localhost:%s/version/1", port)

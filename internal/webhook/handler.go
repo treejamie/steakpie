@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/jc/steakpie/internal/config"
@@ -14,20 +13,8 @@ import (
 // Handler returns an HTTP handler for registry_package webhook events.
 // The secret is used to verify the webhook signature.
 // The cfg parameter contains the package-to-commands mapping.
-func Handler(secret []byte, cfg config.Config) http.HandlerFunc {
-	// ensure the sqlite database is setup and if not set it up
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "db.sqlite"
-	}
-
-	store, err := NewEventStore(dbPath)
-	if err != nil {
-		log.Fatalf("Failed to initialize event store: %v", err)
-	}
-
-	log.Printf("✓ Initialized event store at %s", dbPath)
-
+// The store is used for webhook event deduplication.
+func Handler(secret []byte, cfg config.Config, store *EventStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received %s request from %s", r.Method, r.RemoteAddr)
 
