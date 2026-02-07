@@ -1,7 +1,3 @@
-0.0.2
+0.0.3
 
-When building a release you should name the release based on the contents of this file.
-
-The first line will always be a semantic version number and this MUST be used as the name of the release.
-
-Then there will be blank newline. Everything after this newline will be markdown and MUST be used as the description of the release.
+- now runs commands
