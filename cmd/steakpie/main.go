@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/jc/steakpie/internal/config"
+	"github.com/jc/steakpie/internal/executor"
 	"github.com/jc/steakpie/internal/webhook"
 )
 
@@ -63,7 +64,8 @@ func run() error {
 		port = "3000"
 	}
 
-	http.Handle("/version/1", webhook.Handler([]byte(secret), cfg, store))
+	runner := executor.ShellRunner{}
+	http.Handle("/version/1", webhook.Handler([]byte(secret), cfg, store, runner))
 
 	log.Printf("✓ Server starting on port %s", port)
 	log.Printf("✓ Webhook endpoint: http://localhost:%s/version/1", port)

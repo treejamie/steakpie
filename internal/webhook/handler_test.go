@@ -12,15 +12,32 @@ import (
 	"testing"
 
 	"github.com/jc/steakpie/internal/config"
+	"github.com/jc/steakpie/internal/executor"
 )
 
 var testSecret = []byte("test-secret")
 
 var testConfig = config.Config{
-	"test-package": []string{"echo test", "docker compose up"},
-	"jamiec":       []string{"docker compose down", "docker compose up"},
-	"hello-world":  []string{"echo hello", "docker pull hello-world"},
+	"test-package": {
+		{Cmd: "echo test"},
+		{Cmd: "docker compose up"},
+	},
+	"jamiec": {
+		{Cmd: "docker compose down"},
+		{Cmd: "docker compose up"},
+	},
+	"hello-world": {
+		{Cmd: "echo hello"},
+		{Cmd: "docker pull hello-world"},
+	},
 }
+
+// noopRunner is a no-op runner for handler tests.
+type noopRunner struct{}
+
+func (noopRunner) Run(cmd string) (string, error) { return "", nil }
+
+var testRunner executor.Runner = noopRunner{}
 
 func signPayload(payload, secret []byte) string {
 	mac := hmac.New(sha256.New, secret)
@@ -51,7 +68,7 @@ func TestHandler_ValidPayload(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -68,7 +85,7 @@ func TestHandler_ValidSignature(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -85,7 +102,7 @@ func TestHandler_InvalidSignature(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", "sha256=invalidsignature00000000000000000000000000000000000000000000000000")
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, rec.Code)
@@ -101,7 +118,7 @@ func TestHandler_MissingSignature(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected status %d, got %d", http.StatusForbidden, rec.Code)
@@ -118,7 +135,7 @@ func TestHandler_InvalidJSON(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -135,7 +152,7 @@ func TestHandler_MethodNotAllowed(t *testing.T) {
 			req := httptest.NewRequest(method, "/version/1", nil)
 			rec := httptest.NewRecorder()
 
-			Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+			Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusMethodNotAllowed {
 				t.Errorf("expected status %d for %s, got %d", http.StatusMethodNotAllowed, method, rec.Code)
@@ -154,7 +171,7 @@ func TestHandler_EmptyBody(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -171,7 +188,7 @@ func TestHandler_MissingFields(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -188,7 +205,7 @@ func TestHandler_PingEvent(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -210,7 +227,7 @@ func TestHandler_FormEncodedRejected(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload([]byte(formBody), testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("expected status %d, got %d: %s", http.StatusUnsupportedMediaType, rec.Code, rec.Body.String())
@@ -235,7 +252,7 @@ func TestHandler_ConfiguredPackage(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -261,7 +278,7 @@ func TestHandler_UnconfiguredPackage(t *testing.T) {
 	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -285,7 +302,7 @@ func TestHandler_Idempotency_DuplicateEvent(t *testing.T) {
 	deliveryID := "test-delivery-001"
 
 	// Create handler
-	handler := Handler(testSecret, testConfig, store)
+	handler := Handler(testSecret, testConfig, store, testRunner)
 
 	// First request
 	req1 := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
@@ -329,7 +346,7 @@ func TestHandler_Idempotency_DifferentEvents(t *testing.T) {
 		t.Fatalf("failed to read test payload: %v", err)
 	}
 
-	handler := Handler(testSecret, testConfig, store)
+	handler := Handler(testSecret, testConfig, store, testRunner)
 
 	deliveryIDs := []string{"delivery-001", "delivery-002", "delivery-003"}
 
@@ -367,7 +384,7 @@ func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
 	// Intentionally NOT setting X-GitHub-Delivery header
 	rec := httptest.NewRecorder()
 
-	Handler(testSecret, testConfig, store).ServeHTTP(rec, req)
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
 
 	// Should still return 200 (backwards compatibility)
 	if rec.Code != http.StatusOK {
@@ -386,7 +403,7 @@ func TestHandler_Idempotency_PingEventsNotDeduplicated(t *testing.T) {
 	payload := []byte(`{"zen": "Design for failure.", "hook_id": 123}`)
 	deliveryID := "ping-delivery-001"
 
-	handler := Handler(testSecret, testConfig, store)
+	handler := Handler(testSecret, testConfig, store, testRunner)
 
 	// Send ping event twice with same delivery ID
 	for i := 0; i < 2; i++ {
