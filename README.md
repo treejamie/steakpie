@@ -1,6 +1,11 @@
 # steakpie
 
-A GitHub webhook handler for registry package events.
+A really simple CI/CD server.
+
+It listens for webhooks from Github, and when it receives one for a configured repository it runs the commands that you've specified. 
+
+No abstractions, no elaborate interfaces.  A single binary, a single basic config file and you're off.
+
 
 ## Running
 
