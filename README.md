@@ -25,7 +25,7 @@ Initially designed to work with docker and docker-compose but in theory you can 
 # name of your github repo
 jamiec_ts
   - command to run when an webhook is sent
-    - nest command that runs only if parent succeeeds
+    - nested sub-command that runs only if parent succeeeds
   - paralell command that runs regardless of sibling succewss
 ```
 
