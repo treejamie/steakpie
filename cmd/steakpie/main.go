@@ -18,26 +18,34 @@ func main() {
 	}
 }
 
-func run() error {
-	if len(os.Args) < 2 {
-		return fmt.Errorf("config file path is required\n\n" +
-			"Usage:\n" +
-			"  %s <config-file>\n\n" +
-			"Example:\n" +
-			"  WEBHOOK_SECRET=secret %s config.yaml\n\n" +
-			"Optional environment variables:\n" +
-			"  DB_PATH - Path to SQLite database (default: db.sqlite)", os.Args[0], os.Args[0])
+func findConfig() (string, error) {
+	for _, name := range []string{"config.yml", "config.yaml"} {
+		if _, err := os.Stat(name); err == nil {
+			return name, nil
+		}
 	}
+	return "", fmt.Errorf("no config file found\n\n" +
+		"Place a config.yml (or config.yaml) in the current directory.\n\n" +
+		"Example:\n" +
+		"  WEBHOOK_SECRET=secret steakpie\n\n" +
+		"Optional environment variables:\n" +
+		"  DB_PATH - Path to SQLite database (default: db.sqlite)")
+}
 
+func run() error {
 	secret := os.Getenv("WEBHOOK_SECRET")
 	if secret == "" {
 		return fmt.Errorf("WEBHOOK_SECRET environment variable is required\n\n" +
 			"Please set it before running:\n" +
-			"  WEBHOOK_SECRET=your-secret-here ./steakpie\n\n" +
+			"  WEBHOOK_SECRET=your-secret-here steakpie\n\n" +
 			"This secret is used to verify webhook signatures from GitHub.")
 	}
 
-	configPath := os.Args[1]
+	configPath, err := findConfig()
+	if err != nil {
+		return err
+	}
+
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
