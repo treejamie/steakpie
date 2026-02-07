@@ -1,3 +1,3 @@
-0.0.3
+0.0.4
 
-- now runs commands
+- config.yml or config.yaml is presumed to be present.
