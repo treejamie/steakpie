@@ -8,13 +8,15 @@ import (
 	"strings"
 
 	"github.com/jc/steakpie/internal/config"
+	"github.com/jc/steakpie/internal/executor"
 )
 
 // Handler returns an HTTP handler for registry_package webhook events.
 // The secret is used to verify the webhook signature.
 // The cfg parameter contains the package-to-commands mapping.
 // The store is used for webhook event deduplication.
-func Handler(secret []byte, cfg config.Config, store *EventStore) http.HandlerFunc {
+// The runner is used to execute commands.
+func Handler(secret []byte, cfg config.Config, store *EventStore, runner executor.Runner) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received %s request from %s", r.Method, r.RemoteAddr)
 
@@ -113,6 +115,7 @@ func Handler(secret []byte, cfg config.Config, store *EventStore) http.HandlerFu
 
 		if len(commands) > 0 {
 			log.Printf("✓ Found %d command(s) for package %s", len(commands), packageName)
+			go executor.Execute(runner, packageName, deliveryID, commands)
 		} else {
 			log.Printf("No commands configured for package %s", packageName)
 		}

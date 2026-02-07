@@ -7,3 +7,8 @@ jamiec:
 hello-world:
   - echo "Package hello-world updated"
   - docker pull ghcr.io/example/hello-world:latest
+
+# Nested: child only runs if parent succeeds
+jamiec_ts:
+  - docker compose pull:
+      - doppler run -- docker compose up -d
