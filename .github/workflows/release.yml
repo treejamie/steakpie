@@ -19,13 +19,11 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build binary
-        run: go build -o steakpie ./cmd/steakpie
-
       - name: Read version file
         id: version
         run: |
           VERSION=$(head -n 1 version.txt)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
           # Extract body (everything after the first blank line)
@@ -33,6 +31,13 @@ jobs:
           echo "body<<EOF" >> "$GITHUB_OUTPUT"
           echo "$BODY" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build binaries
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          GOOS=linux GOARCH=amd64 go build -o "steakpie-${VERSION}-amd64" ./cmd/steakpie
+          GOOS=linux GOARCH=arm64 go build -o "steakpie-${VERSION}-arm64" ./cmd/steakpie
+          GOOS=linux GOARCH=386   go build -o "steakpie-${VERSION}-i386"  ./cmd/steakpie
 
       - name: Check if release exists
         id: check
@@ -53,4 +58,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
           body: ${{ steps.version.outputs.body }}
-          files: steakpie
+          files: |
+            steakpie-${{ steps.version.outputs.version }}-amd64
+            steakpie-${{ steps.version.outputs.version }}-arm64
+            steakpie-${{ steps.version.outputs.version }}-i386
