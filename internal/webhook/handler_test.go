@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -268,7 +269,14 @@ func TestHandler_UnconfiguredPackage(t *testing.T) {
 		"registry_package": {
 			"name": "unconfigured-package",
 			"package_version": {
-				"version": "1.0.0"
+				"id": 123456,
+				"version": "sha256:aabbccdd",
+				"container_metadata": {
+					"tag": {
+						"name": "latest",
+						"digest": "sha256:abc123"
+					}
+				}
 			}
 		}
 	}`)
@@ -389,6 +397,89 @@ func TestHandler_Idempotency_MissingDeliveryID(t *testing.T) {
 	// Should still return 200 (backwards compatibility)
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestHandler_NonLatestTagIgnored(t *testing.T) {
+	store := createTestStore(t)
+
+	payload := []byte(`{
+		"action": "published",
+		"registry_package": {
+			"name": "hello-world",
+			"package_version": {
+				"id": 675688875,
+				"version": "sha256:abc123def456",
+				"container_metadata": {
+					"tag": {
+						"name": "v1.2.3",
+						"digest": "sha256:abc123"
+					}
+				}
+			}
+		}
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+	req.Header.Set("X-GitHub-Delivery", "non-latest-delivery")
+	rec := httptest.NewRecorder()
+
+	Handler(testSecret, testConfig, store, testRunner).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Verify nothing was stored in DB
+	count, err := store.Stats()
+	if err != nil {
+		t.Fatalf("failed to query stats: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 events for non-latest tag, got %d", count)
+	}
+}
+
+func TestHandler_ContentDedupDifferentDeliveryIDs(t *testing.T) {
+	tmpDB := t.TempDir() + "/test_db.sqlite"
+	store, err := NewEventStore(tmpDB)
+	if err != nil {
+		t.Fatalf("failed to create event store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	payload, err := os.ReadFile("../../testdata/registry_package_published.json")
+	if err != nil {
+		t.Fatalf("failed to read test payload: %v", err)
+	}
+
+	handler := Handler(testSecret, testConfig, store, testRunner)
+
+	// Send 5 webhooks with different delivery IDs but same content
+	for i := range 5 {
+		deliveryID := fmt.Sprintf("content-dedup-delivery-%d", i)
+		req := httptest.NewRequest(http.MethodPost, "/version/1", strings.NewReader(string(payload)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Hub-Signature-256", signPayload(payload, testSecret))
+		req.Header.Set("X-GitHub-Delivery", deliveryID)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("request %d: expected status %d, got %d", i, http.StatusOK, rec.Code)
+		}
+	}
+
+	// Verify only 1 row in DB
+	count, err := store.Stats()
+	if err != nil {
+		t.Fatalf("failed to query stats: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 event after content dedup, got %d", count)
 	}
 }
 

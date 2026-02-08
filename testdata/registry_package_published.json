@@ -4,11 +4,12 @@
     "name": "hello-world",
     "ecosystem": "docker",
     "package_version": {
-      "version": "1.0.0",
-      "package_url": "ghcr.io/Codertocat/hello-world:1.0.0",
+      "id": 675688875,
+      "version": "sha256:abc123def456789012345678901234567890123456789012345678901234abcd",
+      "package_url": "ghcr.io/Codertocat/hello-world:latest",
       "container_metadata": {
         "tag": {
-          "name": "1.0.0",
+          "name": "latest",
           "digest": "sha256:abc123def456"
         }
       }

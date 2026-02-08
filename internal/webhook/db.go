@@ -46,12 +46,14 @@ func NewEventStore(dbPath string) (*EventStore, error) {
 func initSchema(db *sql.DB) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS events (
-		id TEXT PRIMARY KEY,
+		delivery_id TEXT PRIMARY KEY,
+		tag TEXT NOT NULL,
+		version_id INTEGER NOT NULL,
+		sha TEXT NOT NULL,
 		timestamp DATETIME NOT NULL,
 		repository TEXT NOT NULL
 	);
-	CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-	CREATE INDEX IF NOT EXISTS idx_events_repository ON events(repository);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_events_content_dedup ON events(tag, version_id, sha);
 	`
 
 	_, err := db.Exec(schema)
@@ -60,18 +62,44 @@ func initSchema(db *sql.DB) error {
 
 // RecordEvent attempts to record a webhook event.
 // Returns true if the event is new (successfully inserted).
-// Returns false if the event is a duplicate (constraint violation).
+// Returns false if the event is a duplicate (same tag+version_id+sha content).
 // Returns error for other database failures.
-func (es *EventStore) RecordEvent(deliveryID, repository string) (bool, error) {
-	query := `INSERT INTO events (id, timestamp, repository) VALUES (?, ?, ?)`
-
-	_, err := es.db.Exec(query, deliveryID, time.Now().UTC(), repository)
+func (es *EventStore) RecordEvent(deliveryID, tag string, versionID int64, sha, repository string) (bool, error) {
+	tx, err := es.db.Begin()
 	if err != nil {
-		// Check if this is a constraint violation (duplicate)
+		return false, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check for existing row with same content
+	var exists int
+	err = tx.QueryRow(
+		`SELECT 1 FROM events WHERE tag = ? AND version_id = ? AND sha = ?`,
+		tag, versionID, sha,
+	).Scan(&exists)
+	if err == nil {
+		// Row found — content duplicate
+		return false, nil
+	}
+	if err != sql.ErrNoRows {
+		return false, fmt.Errorf("failed to check for duplicate: %w", err)
+	}
+
+	// Insert new event
+	_, err = tx.Exec(
+		`INSERT INTO events (delivery_id, tag, version_id, sha, timestamp, repository) VALUES (?, ?, ?, ?, ?, ?)`,
+		deliveryID, tag, versionID, sha, time.Now().UTC(), repository,
+	)
+	if err != nil {
+		// Constraint error as race-condition safety net
 		if isConstraintError(err) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to insert event: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return true, nil
