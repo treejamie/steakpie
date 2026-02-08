@@ -1,3 +1,6 @@
-0.0.4
+0.0.5
 
-- config.yml or config.yaml is presumed to be present.
+# Features
+
+- better/actual idempotancy
+ 
