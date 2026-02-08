@@ -17,6 +17,7 @@ type RegistryPackage struct {
 
 // PackageVersion contains version-specific information.
 type PackageVersion struct {
+	ID                int64             `json:"id"`
 	Version           string            `json:"version"`
 	PackageURL        string            `json:"package_url"`
 	ContainerMetadata ContainerMetadata `json:"container_metadata"`

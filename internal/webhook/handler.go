@@ -83,13 +83,24 @@ func Handler(secret []byte, cfg config.Config, store *EventStore, runner executo
 			return
 		}
 
-		// Check for idempotency - extract X-GitHub-Delivery header
+		// Tag filter: only process "latest" tags
+		tagName := event.RegistryPackage.PackageVersion.ContainerMetadata.Tag.Name
+		if tagName != "latest" {
+			log.Printf("Ignoring non-latest tag: %s", tagName)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Content-based deduplication
 		deliveryID := r.Header.Get("X-GitHub-Delivery")
 		if deliveryID == "" {
 			log.Printf("Warning: Missing X-GitHub-Delivery header, proceeding without deduplication")
 		} else {
-			// Try to record the event
-			isNew, err := store.RecordEvent(deliveryID, event.RegistryPackage.Name)
+			versionID := event.RegistryPackage.PackageVersion.ID
+			sha := event.RegistryPackage.PackageVersion.Version
+			packageName := event.RegistryPackage.Name
+
+			isNew, err := store.RecordEvent(deliveryID, tagName, versionID, sha, packageName)
 			if err != nil {
 				log.Printf("Database error while recording event: %v", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
