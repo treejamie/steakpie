@@ -1,6 +1,6 @@
-0.0.5
+0.0.6
 
-# Features
+# Fixes
 
-- better/actual idempotancy
+- fix: nested command config on Pi (YAML formatting - missing colon after parent command)
  
