@@ -12,11 +12,11 @@ type Runner interface {
 	Run(cmd string) (output string, err error)
 }
 
-// ShellRunner runs commands via sh -c.
+// ShellRunner runs commands via bash -lc (login shell for env vars).
 type ShellRunner struct{}
 
 func (s ShellRunner) Run(cmd string) (string, error) {
-	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	out, err := exec.Command("bash", "-lc", cmd).CombinedOutput()
 	return string(out), err
 }
 
