@@ -20,23 +20,35 @@ var testSecret = []byte("test-secret")
 
 var testConfig = config.Config{
 	"test-package": {
-		{Cmd: "echo test"},
-		{Cmd: "docker compose up"},
+		Run: map[string][]config.Command{
+			"/opt/test": {
+				{Cmd: "echo test"},
+				{Cmd: "docker compose up"},
+			},
+		},
 	},
 	"jamiec": {
-		{Cmd: "docker compose down"},
-		{Cmd: "docker compose up"},
+		Run: map[string][]config.Command{
+			"/opt/jamiec": {
+				{Cmd: "docker compose down"},
+				{Cmd: "docker compose up"},
+			},
+		},
 	},
 	"hello-world": {
-		{Cmd: "echo hello"},
-		{Cmd: "docker pull hello-world"},
+		Run: map[string][]config.Command{
+			"/opt/hello": {
+				{Cmd: "echo hello"},
+				{Cmd: "docker pull hello-world"},
+			},
+		},
 	},
 }
 
 // noopRunner is a no-op runner for handler tests.
 type noopRunner struct{}
 
-func (noopRunner) Run(cmd string) (string, error) { return "", nil }
+func (noopRunner) Run(cmd string, dir string) (string, error) { return "", nil }
 
 var testRunner executor.Runner = noopRunner{}
 

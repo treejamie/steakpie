@@ -1,6 +1,5 @@
-0.0.6
+0.0.7
 
-# Fixes
+# Backwards incompatible changes
 
-- fix: nested command config on Pi (YAML formatting - missing colon after parent command)
- 
+- feat: new config style to support runtime directories

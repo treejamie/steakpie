@@ -57,6 +57,29 @@ No.
 
 
 
+```
+jamiec:  name of repo
+  run:  # domain language.
+    /foo/bar:  # this is the directory you want to cd'into
+      - - echo "yay" # a command
+        - echo "nested" # a nested command
+      - cat foo.txt # a parallel command
+    /another/dir:  # cd into another dir
+      - ls -al # another command
+
+```
+
+You get to control what commands run and in what dirs. 
+
+## TODO
+
+- add setup and teardown keys
+- support shells other than bash
+- easy install / update script
+
+
+
+
 ## Running
 
 ### Prerequisites
