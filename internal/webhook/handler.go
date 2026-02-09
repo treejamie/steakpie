@@ -122,11 +122,11 @@ func Handler(secret []byte, cfg config.Config, store *EventStore, runner executo
 			event.RegistryPackage.PackageVersion.Version)
 
 		packageName := event.RegistryPackage.Name
-		commands := cfg.GetCommands(packageName)
+		dirCommands := cfg.GetRun(packageName)
 
-		if len(commands) > 0 {
-			log.Printf("✓ Found %d command(s) for package %s", len(commands), packageName)
-			go executor.Execute(runner, packageName, deliveryID, commands)
+		if len(dirCommands) > 0 {
+			log.Printf("✓ Found commands for package %s in %d director(ies)", packageName, len(dirCommands))
+			go executor.Execute(runner, packageName, deliveryID, dirCommands)
 		} else {
 			log.Printf("No commands configured for package %s", packageName)
 		}

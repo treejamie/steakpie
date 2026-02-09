@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 // MockRunner records commands and returns preset results.
 type MockRunner struct {
 	Commands []string
+	Dirs     []string
 	Results  map[string]struct {
 		Output string
 		Err    error
@@ -35,8 +38,9 @@ func (m *MockRunner) SetResult(cmd, output string, err error) {
 	}{output, err}
 }
 
-func (m *MockRunner) Run(cmd string) (string, error) {
+func (m *MockRunner) Run(cmd string, dir string) (string, error) {
 	m.Commands = append(m.Commands, cmd)
+	m.Dirs = append(m.Dirs, dir)
 	if r, ok := m.Results[cmd]; ok {
 		return r.Output, r.Err
 	}
@@ -56,15 +60,20 @@ func captureLog(f func()) string {
 	return buf.String()
 }
 
+// helper to wrap commands in a single-directory map
+func dirCommands(dir string, commands []config.Command) map[string][]config.Command {
+	return map[string][]config.Command{dir: commands}
+}
+
 func TestParallelFlow_FirstFails_SecondStillRuns(t *testing.T) {
 	runner := NewMockRunner()
 	runner.SetResult("cmd1", "", fmt.Errorf("exit status 1"))
 	runner.SetResult("cmd2", "", nil)
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "cmd1"},
 		{Cmd: "cmd2"},
-	}
+	})
 
 	Execute(runner, "test-pkg", "delivery-1", commands)
 
@@ -83,11 +92,11 @@ func TestNestedFlow_ParentFails_ChildSkipped(t *testing.T) {
 	runner := NewMockRunner()
 	runner.SetResult("parent", "", fmt.Errorf("exit status 1"))
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "parent", Children: []config.Command{
 			{Cmd: "child"},
 		}},
-	}
+	})
 
 	Execute(runner, "test-pkg", "delivery-2", commands)
 
@@ -102,11 +111,11 @@ func TestNestedFlow_ParentFails_ChildSkipped(t *testing.T) {
 func TestNestedFlow_ParentSucceeds_ChildRuns(t *testing.T) {
 	runner := NewMockRunner()
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "parent", Children: []config.Command{
 			{Cmd: "child"},
 		}},
-	}
+	})
 
 	Execute(runner, "test-pkg", "delivery-3", commands)
 
@@ -125,12 +134,12 @@ func TestMixedFlow_ParentFails_ChildSkipped_SiblingRuns(t *testing.T) {
 	runner := NewMockRunner()
 	runner.SetResult("parent", "", fmt.Errorf("exit status 1"))
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "parent", Children: []config.Command{
 			{Cmd: "child"},
 		}},
 		{Cmd: "sibling"},
-	}
+	})
 
 	Execute(runner, "test-pkg", "delivery-4", commands)
 
@@ -148,13 +157,13 @@ func TestMixedFlow_ParentFails_ChildSkipped_SiblingRuns(t *testing.T) {
 func TestDeeplyNestedChain(t *testing.T) {
 	runner := NewMockRunner()
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "l1", Children: []config.Command{
 			{Cmd: "l2", Children: []config.Command{
 				{Cmd: "l3"},
 			}},
 		}},
-	}
+	})
 
 	Execute(runner, "test-pkg", "delivery-5", commands)
 
@@ -172,10 +181,29 @@ func TestDeeplyNestedChain(t *testing.T) {
 func TestEmptyCommandList(t *testing.T) {
 	runner := NewMockRunner()
 
-	Execute(runner, "test-pkg", "delivery-6", []config.Command{})
+	Execute(runner, "test-pkg", "delivery-6", map[string][]config.Command{})
 
 	if len(runner.Commands) != 0 {
 		t.Errorf("expected no commands to run, got %d", len(runner.Commands))
+	}
+}
+
+func TestDirectoryPassedToRunner(t *testing.T) {
+	runner := NewMockRunner()
+
+	commands := map[string][]config.Command{
+		"/opt/myapp": {
+			{Cmd: "echo hello"},
+		},
+	}
+
+	Execute(runner, "test-pkg", "delivery-7", commands)
+
+	if len(runner.Dirs) != 1 {
+		t.Fatalf("expected 1 dir, got %d", len(runner.Dirs))
+	}
+	if runner.Dirs[0] != "/opt/myapp" {
+		t.Errorf("expected dir '/opt/myapp', got '%s'", runner.Dirs[0])
 	}
 }
 
@@ -183,10 +211,10 @@ func TestLogOutput_ParallelFlow(t *testing.T) {
 	runner := NewMockRunner()
 	runner.SetResult("cmd1", "hello output", nil)
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "cmd1"},
 		{Cmd: "cmd2"},
-	}
+	})
 
 	output := captureLog(func() {
 		Execute(runner, "mypkg", "d-123", commands)
@@ -194,7 +222,7 @@ func TestLogOutput_ParallelFlow(t *testing.T) {
 
 	expectations := []string{
 		"start webhook for mypkg received with id: d-123",
-		"parallel flow detected",
+		"executing in directory: /opt/test",
 		"running command 1 of 2: cmd1",
 		"output: hello output",
 		"command 1 of 2 succeeded",
@@ -213,18 +241,18 @@ func TestLogOutput_ParallelFlow(t *testing.T) {
 func TestLogOutput_NestedFlow(t *testing.T) {
 	runner := NewMockRunner()
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "parent", Children: []config.Command{
 			{Cmd: "child"},
 		}},
-	}
+	})
 
 	output := captureLog(func() {
 		Execute(runner, "mypkg", "d-456", commands)
 	})
 
-	if !strings.Contains(output, "nested flow detected") {
-		t.Errorf("expected 'nested flow detected' in log, got:\n%s", output)
+	if !strings.Contains(output, "executing in directory: /opt/test") {
+		t.Errorf("expected directory log, got:\n%s", output)
 	}
 }
 
@@ -232,9 +260,9 @@ func TestLogOutput_FailedCommand(t *testing.T) {
 	runner := NewMockRunner()
 	runner.SetResult("bad", "", fmt.Errorf("exit status 1"))
 
-	commands := []config.Command{
+	commands := dirCommands("/opt/test", []config.Command{
 		{Cmd: "bad"},
-	}
+	})
 
 	output := captureLog(func() {
 		Execute(runner, "mypkg", "d-789", commands)
@@ -248,7 +276,7 @@ func TestLogOutput_FailedCommand(t *testing.T) {
 func TestShellRunner_Integration(t *testing.T) {
 	runner := ShellRunner{}
 
-	output, err := runner.Run("echo hello world")
+	output, err := runner.Run("echo hello world", "")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -262,19 +290,42 @@ func TestShellRunner_Integration(t *testing.T) {
 func TestShellRunner_Integration_FailingCommand(t *testing.T) {
 	runner := ShellRunner{}
 
-	_, err := runner.Run("false")
+	_, err := runner.Run("false", "")
 	if err == nil {
 		t.Fatal("expected error for failing command, got nil")
+	}
+}
+
+func TestShellRunner_Integration_WithDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a file in the temp directory
+	testFile := filepath.Join(tmpDir, "hello.txt")
+	if err := os.WriteFile(testFile, []byte("world"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	runner := ShellRunner{}
+
+	// Run cat in the temp directory - use relative path to verify dir works
+	output, err := runner.Run("cat hello.txt", tmpDir)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	trimmed := strings.TrimSpace(output)
+	if trimmed != "world" {
+		t.Errorf("expected 'world', got '%s'", trimmed)
 	}
 }
 
 func TestShellRunner_Integration_WithExecute(t *testing.T) {
 	runner := ShellRunner{}
 
-	commands := []config.Command{
+	commands := dirCommands("", []config.Command{
 		{Cmd: "echo step1"},
 		{Cmd: "echo step2"},
-	}
+	})
 
 	output := captureLog(func() {
 		Execute(runner, "integration-pkg", "int-001", commands)

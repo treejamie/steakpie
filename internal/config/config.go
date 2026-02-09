@@ -16,41 +16,35 @@ type Command struct {
 
 // UnmarshalYAML implements custom YAML unmarshaling for Command.
 // It handles two forms:
-//   - Scalar: "docker compose pull" → Command{Cmd: "docker compose pull"}
-//   - Mapping: "docker compose pull": ["child1", "child2"] → Command with children
+//   - Scalar: "echo hello" → Command{Cmd: "echo hello"}
+//   - Sequence: ["parent", "child1", "child2"] → Command with children
+//     The first element is the parent command, the rest are children.
 func (c *Command) UnmarshalYAML(node *yaml.Node) error {
 	switch node.Kind {
 	case yaml.ScalarNode:
 		c.Cmd = node.Value
 		return nil
 
-	case yaml.MappingNode:
-		if len(node.Content) != 2 {
-			return fmt.Errorf("command mapping must have exactly one key, got %d", len(node.Content)/2)
+	case yaml.SequenceNode:
+		if len(node.Content) == 0 {
+			return fmt.Errorf("command sequence must not be empty")
 		}
 
-		// First element is the key (command string)
-		keyNode := node.Content[0]
-		if keyNode.Kind != yaml.ScalarNode {
-			return fmt.Errorf("command key must be a string")
+		// First element is the parent command (must be a scalar)
+		first := node.Content[0]
+		if first.Kind != yaml.ScalarNode {
+			return fmt.Errorf("first element of command sequence must be a string")
 		}
-		c.Cmd = keyNode.Value
+		c.Cmd = first.Value
 
-		// Second element is the value (list of child commands)
-		valueNode := node.Content[1]
-		if valueNode.Kind != yaml.SequenceNode {
-			return fmt.Errorf("command children must be a list")
-		}
-
-		var children []Command
-		for _, childNode := range valueNode.Content {
+		// Remaining elements are children
+		for _, childNode := range node.Content[1:] {
 			var child Command
 			if err := child.UnmarshalYAML(childNode); err != nil {
 				return err
 			}
-			children = append(children, child)
+			c.Children = append(c.Children, child)
 		}
-		c.Children = children
 		return nil
 
 	default:
@@ -58,9 +52,14 @@ func (c *Command) UnmarshalYAML(node *yaml.Node) error {
 	}
 }
 
+// PackageConfig holds the configuration for a single package.
+type PackageConfig struct {
+	Run map[string][]Command `yaml:"run"`
+}
+
 // Config represents the application configuration.
-// It maps package names to a list of commands to execute.
-type Config map[string][]Command
+// It maps package names to their configuration.
+type Config map[string]PackageConfig
 
 // Load reads and parses a YAML configuration file.
 func Load(path string) (Config, error) {
@@ -81,8 +80,12 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
-// GetCommands returns the list of commands for a given package name.
+// GetRun returns the directory-to-commands mapping for a given package name.
 // Returns nil if the package is not configured.
-func (c Config) GetCommands(packageName string) []Command {
-	return c[packageName]
+func (c Config) GetRun(packageName string) map[string][]Command {
+	pkg, ok := c[packageName]
+	if !ok {
+		return nil
+	}
+	return pkg.Run
 }
