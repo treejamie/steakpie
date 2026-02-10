@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -8,15 +8,13 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /steakpie ./cmd/steakpie
 
 # ── Minimal runtime ────────────────────────────────────────
-# Debian slim gives us bash (needed for `bash -lc` command execution).
+# Alpine + bash (needed for `bash -lc` command execution).
 # If you don't need the Docker socket, consider adding:
-#   RUN useradd -r steakpie && chown steakpie /app
+#   RUN adduser -D steakpie && chown steakpie /app
 #   USER steakpie
-FROM debian:bookworm-slim AS minimal
+FROM alpine:3.21 AS minimal
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache bash ca-certificates
 
 COPY --from=builder /steakpie /usr/local/bin/steakpie
 
@@ -29,19 +27,4 @@ ENTRYPOINT ["steakpie"]
 # common case of running `docker compose` commands from hooks.
 FROM minimal AS docker
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      curl \
-      gnupg \
- && curl -fsSL https://download.docker.com/linux/debian/gpg \
-      | gpg --dearmor -o /usr/share/keyrings/docker.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] \
-      https://download.docker.com/linux/debian bookworm stable" \
-      > /etc/apt/sources.list.d/docker.list \
- && apt-get update \
- && apt-get install -y --no-install-recommends \
-      docker-ce-cli \
-      docker-compose-plugin \
- && apt-get purge -y curl gnupg \
- && apt-get autoremove -y \
- && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache docker-cli docker-cli-compose
