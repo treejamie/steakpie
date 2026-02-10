@@ -5,7 +5,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /steakpie ./cmd/steakpie
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /steakpie ./cmd/steakpie
 
 # ── Minimal runtime ────────────────────────────────────────
 # Alpine + bash (needed for `bash -lc` command execution).
@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 go build -o /steakpie ./cmd/steakpie
 #   USER steakpie
 FROM alpine:3.21 AS minimal
 
-RUN apk add --no-cache bash ca-certificates
+RUN apk add --no-cache bash
 
 COPY --from=builder /steakpie /usr/local/bin/steakpie
 
