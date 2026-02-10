@@ -69,7 +69,7 @@ func run() error {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3000"
+		port = "3142"
 	}
 
 	runner := executor.ShellRunner{}
