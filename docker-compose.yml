@@ -1,0 +1,18 @@
+services:
+  steakpie:
+    build:
+      context: .
+      target: docker
+    ports:
+      - "3142:3142"
+    environment:
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - DB_PATH=/app/data/db.sqlite
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+      - data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  data:

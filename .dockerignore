@@ -1,0 +1,13 @@
+steakpie
+*.sqlite*
+.git
+.github
+.gitignore
+.claude
+.prompts
+config.yaml
+config.yml
+testdata
+*.md
+version.txt
+.DS_Store

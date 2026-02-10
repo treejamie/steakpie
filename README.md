@@ -19,7 +19,7 @@ Initially designed to work with docker and docker-compose but in theory you can 
 1. Download the binary to your server. `wget https://github.com/treejamie/steakpie/releases/download/v0.0.4/steakpie-0.0.4-arm64§
 2. Maybe link it becasue your OCD won't let you run a binary with a messy name - `ln -s steakpie-0.0.4-arm64 steakpie`
 3. Make it executable §chmod +x `steakpie-0.0.4-arm64`
-4. Make sure you've got `$WEBHOOK_SECRET` in your environment and if you want to run on a port other than 3000, then set `$PORT`
+4. Make sure you've got `$WEBHOOK_SECRET` in your environment and if you want to run on a port other than 3142, then set `$PORT`
 5. Make a config file called config.yml or config.yaml
 ```bash
 # name of your github repo
@@ -95,12 +95,12 @@ export WEBHOOK_SECRET=your-github-webhook-secret
 ./steakpie
 ```
 
-The server will start on port 3000 by default.
+The server will start on port 3142 by default.
 
 ### Custom port
 
 ```bash
-PORT=3000 ./steakpie
+PORT=3142 ./steakpie
 ```
 
 ### Example
