@@ -1,5 +1,10 @@
-0.0.7
+0.0.8
 
 # Backwards incompatible changes
 
 - feat: new config style to support runtime directories
+
+# Changes
+
+- feat: default port changed from 3000 to 3142
+- feat: add Docker support (Dockerfile + docker-compose.yml)
