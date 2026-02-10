@@ -7,6 +7,8 @@ A really simple CI/CD server.  It listens for webhooks from Github, and when it 
 
 You MUST make a plan before starting work and you MUST get that plan approved by asking the human.
 
+When creating a plan file, add `Prompt: .prompts/<number>.md` as the first line so that plans are linked back to the prompt that triggered the work. Ask the human for the prompt number if you don't know it.
+
 Each item of work will take place on a new branch and the human will ensure the branch is created BEFORE he gives you a prompt. He will do this using his "gitgo" command which ensures there is ALWAYS a fresh copy of main that is up to date BEFORE a new branch is created.
 
 You MUST ensure that that tests pass for each step of your plan before moving on to the next part. You MUST ALWAYS fix broken tests by fixing non-test code but if you think the tests need to be edited, you MUST get permission from the human.
