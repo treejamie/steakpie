@@ -6,7 +6,7 @@ NOTE: NOT QUITE READY FOR PUBLIC USE
 
 A really simple CD server.
 
-It listens for webhooks from Githubs `repository.packages webhook`, and when it receives one for a configured repository, that has ab image tag of `latest` it runs the commands that you've specified. 
+It listens for webhooks from Githubs `registry.packages` webhook, and when it receives one for a configured repository, that has ab image tag of `latest` it runs the commands that you've specified. 
 
 No abstractions, no elaborate interfaces.  A single binary, a single basic config file and you're off.
 
