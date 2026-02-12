@@ -4,9 +4,9 @@ NOTE: NOT QUITE READY FOR PUBLIC USE
 # steakpie
 
 
-A really simple CI/CD server.
+A really simple CD server.
 
-It listens for webhooks from Github, and when it receives one for a configured repository it runs the commands that you've specified. 
+It listens for webhooks from Githubs `repository.packages webhook`, and when it receives one for a configured repository, that has ab image tag of `latest` it runs the commands that you've specified. 
 
 No abstractions, no elaborate interfaces.  A single binary, a single basic config file and you're off.
 
@@ -59,7 +59,11 @@ Life is too short for that much yaml.
 
 No.
 
+### Cron
 
+You got me. There's no reason you couldn't use a crontab and shell script to do this periodically and you'd get free email support if your machine had that configured.
+
+However, that would have been a lousy project.
 
 
 ```
