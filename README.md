@@ -1,6 +1,18 @@
 NOTE: NOT QUITE READY FOR PUBLIC USE
 
 
+
+
+
+## TODO
+
+- add setup and teardown keys
+- support shells other than bash
+- update the readme with smooth as butter instructions
+- choose a license
+
+
+
 # steakpie
 
 
@@ -33,10 +45,14 @@ jamiec:  name of repo
       - ls -al # another command
 
 ```
-You're going to have to expose this to the internet somehow. I like cloudflare tunnels as it saves me poking holes in my firewalls, but if you're fine with that then you want to open up port 3142.
 
 
-## Why the package thing?
+You get to control what commands run and in what dirs.  No more see-sawing with npm commands and setting root directorys, just do the thing.
+
+Finally, you're going to have to expose this to the internet somehow. I like cloudflare tunnels as it saves me poking holes in my firewalls, but if you're fine with that then you want to open up port 3142.
+
+
+## Why?
 
 I was building a docker image as a build step when code was merged into main. I wanted to pull the latest image.
 
@@ -65,30 +81,14 @@ You got me. There's no reason you couldn't use a crontab and shell script to do 
 However, that would have been a lousy project.
 
 
-```
-jamiec:  name of repo
-  run:  # domain language.
-    /foo/bar:  # this is the directory you want to cd'into
-      - - echo "yay" # a command
-        - echo "nested" # a nested command
-      - cat foo.txt # a parallel command
-    /another/dir:  # cd into another dir
-      - ls -al # another command
-
-```
-
-You get to control what commands run and in what dirs. 
-
-## TODO
-
-- add setup and teardown keys
-- support shells other than bash
-- easy install / update script
 
 
 
 
 ## Running
+
+I like doppler for secret management, but you're free to do whatever you want with your environmental variables.
+
 
 ### Prerequisites
 
@@ -103,7 +103,7 @@ export WEBHOOK_SECRET=your-github-webhook-secret
 ./steakpie
 ```
 
-The server will start on port 3142 by default.
+The server will start on port 3142 by default but you can put it on whatever port you want.
 
 ### Custom port
 
@@ -111,13 +111,15 @@ The server will start on port 3142 by default.
 PORT=3142 ./steakpie
 ```
 
-### Example
+### Full Example
 
 ```bash
 WEBHOOK_SECRET=my-secret-key ./steakpie
 ```
 
 ## Building
+
+You devil you..
 
 ```bash
 go build -o steakpie ./cmd/steakpie
