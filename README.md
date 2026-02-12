@@ -23,10 +23,15 @@ Initially designed to work with docker and docker-compose but in theory you can 
 5. Make a config file called config.yml or config.yaml
 ```bash
 # name of your github repo
-jamiec_ts
-  - command to run when an webhook is sent
-    - nested sub-command that runs only if parent succeeeds
-  - paralell command that runs regardless of sibling succewss
+jamiec:  name of repo
+  run:  # domain language - consider it a static string.
+    /foo/bar:  # this is the directory you want to cd'into to run the below commands.
+      - - echo "yay" # a command
+        - echo "nested" # a nested command
+      - cat foo.txt # a parallel command
+    /another/dir:  # cd into another dir to do some other stuff
+      - ls -al # another command
+
 ```
 
 
